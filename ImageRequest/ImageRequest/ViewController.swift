@@ -21,6 +21,21 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        // TODO: Add all the networking code here!
+        guard let imageURL = NSURL(string: "https://upload.wikimedia.org/wikipedia/commons/4/4d/Cat_November_2010-1a.jpg") else {
+            return
+        }
+        
+        let task = NSURLSession.sharedSession().dataTaskWithURL(imageURL) {
+            data, response, error in
+            guard let data = data else {
+                return
+            }
+            
+            dispatch_async(dispatch_get_main_queue()) {
+                self.imageView.image = UIImage(data: data)
+            }
+        }
+        
+        task.resume()
     }
 }
