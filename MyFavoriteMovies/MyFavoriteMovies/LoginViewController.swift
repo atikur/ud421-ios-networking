@@ -206,6 +206,7 @@ class LoginViewController: UIViewController {
             }
             
             self.appDelegate.sessionID = sessionId
+            self.getUserID(sessionId)
             
             print("Session ID: \(sessionId)")
         }
@@ -214,14 +215,35 @@ class LoginViewController: UIViewController {
     
     private func getUserID(sessionID: String) {
         
-        /* TASK: Get the user's ID, then store it (appDelegate.userID) for future use and go to next view! */
+        let methodParameters = [
+            Constants.TMDBParameterKeys.ApiKey: Constants.TMDBParameterValues.ApiKey,
+            Constants.TMDBParameterKeys.SessionID: sessionID
+        ]
         
-        /* 1. Set the parameters */
-        /* 2/3. Build the URL, Configure the request */
-        /* 4. Make the request */
-        /* 5. Parse the data */
-        /* 6. Use the data! */
-        /* 7. Start the request */
+        let url = appDelegate.tmdbURLFromParameters(methodParameters, withPathExtension: "/account")
+        let request = NSURLRequest(URL: url)
+        
+        let task = appDelegate.sharedSession.dataTaskWithRequest(request) {
+            data, response, error in
+            
+            guard let parsedResult = self.getParsedResult(data, response: response, error: error) else {
+                dispatch_async(dispatch_get_main_queue()) {
+                    self.debugTextLabel.text = "Can't get user id."
+                }
+                return
+            }
+            
+            guard let userId = parsedResult[Constants.TMDBResponseKeys.UserID] as? Int else {
+                self.displayError("Can't get user id.")
+                return
+            }
+            
+            self.appDelegate.userID = userId
+            
+            print("User id: \(userId)")
+        }
+        
+        task.resume()
     }
 }
 
