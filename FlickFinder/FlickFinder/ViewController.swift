@@ -110,48 +110,55 @@ class ViewController: UIViewController {
     // MARK: Flickr API
     
     private func displayImageFromFlickrBySearch(methodParameters: [String:AnyObject]) {
-        let url = flickrURLFromParameters(methodParameters)
-        let request = NSURLRequest(URL: url)
-        let task = NSURLSession.sharedSession().dataTaskWithRequest(request) {
+        // make a request to get random page from result
+        let pageRequestUrl = flickrURLFromParameters(methodParameters)
+        let pageRequest = NSURLRequest(URL: pageRequestUrl)
+        
+        let pageRequestTask = NSURLSession.sharedSession().dataTaskWithRequest(pageRequest) {
+            data, response, error in
+            
+            guard let parsedResult = self.getParsedResult(data, response: response, error: error),
+                randomResultPageNumber = self.getRandomResultPageNumber(parsedResult) else {
+                return
+            }
+            
+            // make a second request to get specified page
+            let imageRequestTask = self.makeRequestToGetImage(methodParameters, randomResultPageNumber: randomResultPageNumber)
+            imageRequestTask.resume()
+        }
+        pageRequestTask.resume()
+    }
+    
+    func makeRequestToGetImage(methodParameters: [String: AnyObject], randomResultPageNumber: Int) -> NSURLSessionDataTask {
+        var imageRequestParams = methodParameters
+        imageRequestParams[Constants.FlickrParameterKeys.Page] = randomResultPageNumber
+        
+        let imageRequestURL = self.flickrURLFromParameters(imageRequestParams)
+        let imageRequest = NSURLRequest(URL: imageRequestURL)
+        
+        let imageRequestTask = NSURLSession.sharedSession().dataTaskWithRequest(imageRequest) {
             data, response, error in
             
             guard let parsedResult = self.getParsedResult(data, response: response, error: error) else {
                 return
             }
             
-            guard let randomResultPageNumber = self.getRandomResultPageNumber(parsedResult) else {
+            guard let randomPhoto = self.getRandomPhoto(parsedResult) else {
                 return
             }
             
-            // make a second request to get specified page
-            var imageRequestParams = methodParameters
-            imageRequestParams[Constants.FlickrParameterKeys.Page] = randomResultPageNumber
-            let imageRequestURL = self.flickrURLFromParameters(imageRequestParams)
-            let imageRequest = NSURLRequest(URL: imageRequestURL)
-            let imageRequestTask = NSURLSession.sharedSession().dataTaskWithRequest(imageRequest) {
-                data, response, error in
-                
-                guard let parsedResult = self.getParsedResult(data, response: response, error: error) else {
-                    return
-                }
-                
-                guard let randomPhoto = self.getRandomPhoto(parsedResult) else {
-                    return
-                }
-                
-                guard let (image, photoTitle) = self.parsePhotoDic(randomPhoto) else {
-                    return
-                }
-                
-                dispatch_async(dispatch_get_main_queue()) {
-                    self.photoImageView.image = image
-                    self.photoTitleLabel.text = photoTitle
-                    self.setUIEnabled(true)
-                }
+            guard let (image, photoTitle) = self.parsePhotoDic(randomPhoto) else {
+                return
             }
-            imageRequestTask.resume()
+            
+            dispatch_async(dispatch_get_main_queue()) {
+                self.photoImageView.image = image
+                self.photoTitleLabel.text = photoTitle
+                self.setUIEnabled(true)
+            }
         }
-        task.resume()
+        
+        return imageRequestTask
     }
     
     func getRandomResultPageNumber(parsedResult: AnyObject) -> Int? {
@@ -161,20 +168,35 @@ class ViewController: UIViewController {
                 return nil
         }
 
-        return Int(arc4random_uniform(UInt32(min(pagesCount, 40))))
+        return Int(arc4random_uniform(UInt32(min(pagesCount, 40)))) + 1
     }
     
-    func displayError(message: String) {
-        let alertController = UIAlertController(title: "Error", message: message, preferredStyle: .Alert)
-        let okayAction = UIAlertAction(title: "Okay", style: .Default) {
-            action in
-            self.setUIEnabled(true)
+    func getRandomPhoto(parsedResult: AnyObject) -> [String: AnyObject]? {
+        guard let photosDict = parsedResult[Constants.FlickrResponseKeys.Photos] as? [String: AnyObject],
+            photoArr = photosDict[Constants.FlickrResponseKeys.Photo] as? [[String: AnyObject]]
+            where !photoArr.isEmpty else {
+                self.displayError("Can't get photos array!")
+                return nil
         }
-        alertController.addAction(okayAction)
         
-        dispatch_async(dispatch_get_main_queue()) {
-            self.presentViewController(alertController, animated: true, completion: nil)
+        let randomIndex = Int(arc4random_uniform(UInt32(photoArr.count)))
+        return photoArr[randomIndex]
+    }
+    
+    func parsePhotoDic(randomPhoto: [String: AnyObject]) -> (image: UIImage, title: String)? {
+        guard let imageUrlString = randomPhoto[Constants.FlickrResponseKeys.MediumURL] as? String,
+            imageURL = NSURL(string: imageUrlString),
+            photoTitle = randomPhoto[Constants.FlickrResponseKeys.Title] as? String else {
+                self.displayError("Can't get image url or title!")
+                return nil
         }
+        
+        guard let imageData = NSData(contentsOfURL: imageURL), image = UIImage(data: imageData) else {
+            self.displayError("Can't retrieve image!")
+            return nil
+        }
+        
+        return (image, photoTitle)
     }
     
     func getParsedResult(data: NSData?, response: NSURLResponse?, error: NSError?) -> AnyObject? {
@@ -204,32 +226,17 @@ class ViewController: UIViewController {
         return parsedResult
     }
     
-    func getRandomPhoto(parsedResult: AnyObject) -> [String: AnyObject]? {        
-        guard let photosDict = parsedResult[Constants.FlickrResponseKeys.Photos] as? [String: AnyObject],
-            photoArr = photosDict[Constants.FlickrResponseKeys.Photo] as? [[String: AnyObject]]
-            where !photoArr.isEmpty else {
-                self.displayError("Can't get photos array!")
-                return nil
+    func displayError(message: String) {
+        let alertController = UIAlertController(title: "Error", message: message, preferredStyle: .Alert)
+        let okayAction = UIAlertAction(title: "Okay", style: .Default) {
+            action in
+            self.setUIEnabled(true)
         }
+        alertController.addAction(okayAction)
         
-        let randomIndex = Int(arc4random_uniform(UInt32(photoArr.count)))
-        return photoArr[randomIndex]
-    }
-    
-    func parsePhotoDic(randomPhoto: [String: AnyObject]) -> (image: UIImage, title: String)? {
-        guard let imageUrlString = randomPhoto[Constants.FlickrResponseKeys.MediumURL] as? String,
-            imageURL = NSURL(string: imageUrlString),
-            photoTitle = randomPhoto[Constants.FlickrResponseKeys.Title] as? String else {
-                self.displayError("Can't get image url or title!")
-                return nil
+        dispatch_async(dispatch_get_main_queue()) {
+            self.presentViewController(alertController, animated: true, completion: nil)
         }
-        
-        guard let imageData = NSData(contentsOfURL: imageURL), image = UIImage(data: imageData) else {
-            self.displayError("Can't retrieve image!")
-            return nil
-        }
-        
-        return (image, photoTitle)
     }
     
     // MARK: Helper for Creating a URL from Parameters
