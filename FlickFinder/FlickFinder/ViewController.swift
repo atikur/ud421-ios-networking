@@ -115,48 +115,15 @@ class ViewController: UIViewController {
         let task = NSURLSession.sharedSession().dataTaskWithRequest(request) {
             data, response, error in
             
-            guard error == nil else {
-                self.displayError("Unknown error occured!")
+            guard let parsedResult = self.getParsedResult(data, response: response, error: error) else {
                 return
             }
             
-            guard let statusCode = (response as? NSHTTPURLResponse)?.statusCode where statusCode >= 200 && statusCode <= 299 else {
-                self.displayError("Bad response!")
+            guard let randomPhoto = self.getRandomPhoto(parsedResult) else {
                 return
             }
             
-            guard let data = data else {
-                self.displayError("No data received!")
-                return
-            }
-            
-            let parsedResult: AnyObject
-            do {
-                parsedResult = try NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
-            } catch {
-                self.displayError("Can't parse json data!")
-                return
-            }
-            
-            guard let photosDict = parsedResult[Constants.FlickrResponseKeys.Photos] as? [String: AnyObject],
-                photoArr = photosDict[Constants.FlickrResponseKeys.Photo] as? [[String: AnyObject]]
-                where !photoArr.isEmpty else {
-                    self.displayError("Can't get photos array!")
-                    return
-            }
-            
-            let randomIndex = Int(arc4random_uniform(UInt32(photoArr.count)))
-            let randomPhoto = photoArr[randomIndex]
-            
-            guard let imageUrlString = randomPhoto[Constants.FlickrResponseKeys.MediumURL] as? String,
-                imageURL = NSURL(string: imageUrlString),
-                photoTitle = randomPhoto[Constants.FlickrResponseKeys.Title] as? String else {
-                    self.displayError("Can't get image url or title!")
-                    return
-            }
-            
-            guard let imageData = NSData(contentsOfURL: imageURL), image = UIImage(data: imageData) else {
-                self.displayError("Can't retrieve image!")
+            guard let (image, photoTitle) = self.parsePhotoDic(randomPhoto) else {
                 return
             }
             
@@ -180,6 +147,61 @@ class ViewController: UIViewController {
         dispatch_async(dispatch_get_main_queue()) {
             self.presentViewController(alertController, animated: true, completion: nil)
         }
+    }
+    
+    func getParsedResult(data: NSData?, response: NSURLResponse?, error: NSError?) -> AnyObject? {
+        guard error == nil else {
+            self.displayError("Unknown error occured!")
+            return nil
+        }
+        
+        guard let statusCode = (response as? NSHTTPURLResponse)?.statusCode where statusCode >= 200 && statusCode <= 299 else {
+            self.displayError("Bad response!")
+            return nil
+        }
+        
+        guard let data = data else {
+            self.displayError("No data received!")
+            return nil
+        }
+        
+        let parsedResult: AnyObject
+        do {
+            parsedResult = try NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
+        } catch {
+            self.displayError("Can't parse json data!")
+            return nil
+        }
+        
+        return parsedResult
+    }
+    
+    func getRandomPhoto(parsedResult: AnyObject) -> [String: AnyObject]? {
+        guard let photosDict = parsedResult[Constants.FlickrResponseKeys.Photos] as? [String: AnyObject],
+            photoArr = photosDict[Constants.FlickrResponseKeys.Photo] as? [[String: AnyObject]]
+            where !photoArr.isEmpty else {
+                self.displayError("Can't get photos array!")
+                return nil
+        }
+        
+        let randomIndex = Int(arc4random_uniform(UInt32(photoArr.count)))
+        return photoArr[randomIndex]
+    }
+    
+    func parsePhotoDic(randomPhoto: [String: AnyObject]) -> (image: UIImage, title: String)? {
+        guard let imageUrlString = randomPhoto[Constants.FlickrResponseKeys.MediumURL] as? String,
+            imageURL = NSURL(string: imageUrlString),
+            photoTitle = randomPhoto[Constants.FlickrResponseKeys.Title] as? String else {
+                self.displayError("Can't get image url or title!")
+                return nil
+        }
+        
+        guard let imageData = NSData(contentsOfURL: imageURL), image = UIImage(data: imageData) else {
+            self.displayError("Can't retrieve image!")
+            return nil
+        }
+        
+        return (image, photoTitle)
     }
     
     // MARK: Helper for Creating a URL from Parameters
