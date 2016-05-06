@@ -119,21 +119,49 @@ class ViewController: UIViewController {
                 return
             }
             
-            guard let randomPhoto = self.getRandomPhoto(parsedResult) else {
+            guard let randomResultPageNumber = self.getRandomResultPageNumber(parsedResult) else {
                 return
             }
             
-            guard let (image, photoTitle) = self.parsePhotoDic(randomPhoto) else {
-                return
+            // make a second request to get specified page
+            var imageRequestParams = methodParameters
+            imageRequestParams[Constants.FlickrParameterKeys.Page] = randomResultPageNumber
+            let imageRequestURL = self.flickrURLFromParameters(imageRequestParams)
+            let imageRequest = NSURLRequest(URL: imageRequestURL)
+            let imageRequestTask = NSURLSession.sharedSession().dataTaskWithRequest(imageRequest) {
+                data, response, error in
+                
+                guard let parsedResult = self.getParsedResult(data, response: response, error: error) else {
+                    return
+                }
+                
+                guard let randomPhoto = self.getRandomPhoto(parsedResult) else {
+                    return
+                }
+                
+                guard let (image, photoTitle) = self.parsePhotoDic(randomPhoto) else {
+                    return
+                }
+                
+                dispatch_async(dispatch_get_main_queue()) {
+                    self.photoImageView.image = image
+                    self.photoTitleLabel.text = photoTitle
+                    self.setUIEnabled(true)
+                }
             }
-            
-            dispatch_async(dispatch_get_main_queue()) {
-                self.photoImageView.image = image
-                self.photoTitleLabel.text = photoTitle
-                self.setUIEnabled(true)
-            }
+            imageRequestTask.resume()
         }
         task.resume()
+    }
+    
+    func getRandomResultPageNumber(parsedResult: AnyObject) -> Int? {
+        guard let photosDict = parsedResult[Constants.FlickrResponseKeys.Photos] as? [String: AnyObject],
+            pagesCount = photosDict[Constants.FlickrResponseKeys.Pages] as? Int else {
+                self.displayError("Can't find pages count!")
+                return nil
+        }
+
+        return Int(arc4random_uniform(UInt32(min(pagesCount, 40))))
     }
     
     func displayError(message: String) {
@@ -176,7 +204,7 @@ class ViewController: UIViewController {
         return parsedResult
     }
     
-    func getRandomPhoto(parsedResult: AnyObject) -> [String: AnyObject]? {
+    func getRandomPhoto(parsedResult: AnyObject) -> [String: AnyObject]? {        
         guard let photosDict = parsedResult[Constants.FlickrResponseKeys.Photos] as? [String: AnyObject],
             photoArr = photosDict[Constants.FlickrResponseKeys.Photo] as? [[String: AnyObject]]
             where !photoArr.isEmpty else {
