@@ -119,7 +119,7 @@ class LoginViewController: UIViewController {
         }
         
         guard let statusCode = (response as? NSHTTPURLResponse)?.statusCode where statusCode >= 200 && statusCode <= 299 else {
-            self.displayError("Status code not 2**")
+            self.displayError("Status code not 2xx")
             return nil
         }
         
@@ -174,6 +174,7 @@ class LoginViewController: UIViewController {
                 return
             }
             
+            self.getSessionID(requestToken)
             print("Logged in...")
         }
         task.resume()
@@ -181,14 +182,34 @@ class LoginViewController: UIViewController {
     
     private func getSessionID(requestToken: String) {
         
-        /* TASK: Get a session ID, then store it (appDelegate.sessionID) and get the user's id */
+        let methodParameters = [
+            Constants.TMDBParameterKeys.ApiKey: Constants.TMDBParameterValues.ApiKey,
+            Constants.TMDBParameterKeys.RequestToken: requestToken,
+        ]
         
-        /* 1. Set the parameters */
-        /* 2/3. Build the URL, Configure the request */
-        /* 4. Make the request */
-        /* 5. Parse the data */
-        /* 6. Use the data! */
-        /* 7. Start the request */
+        let url = appDelegate.tmdbURLFromParameters(methodParameters, withPathExtension: "/authentication/session/new")
+        let request = NSURLRequest(URL: url)
+        
+        let task = appDelegate.sharedSession.dataTaskWithRequest(request) {
+            data, response, error in
+            
+            guard let parsedResult = self.getParsedResult(data, response: response, error: error) else {
+                dispatch_async(dispatch_get_main_queue()) {
+                    self.debugTextLabel.text = "Can't get session id."
+                }
+                return
+            }
+            
+            guard let sessionId = parsedResult[Constants.TMDBParameterKeys.SessionID] as? String else {
+                print("Can't get session id.")
+                return
+            }
+            
+            self.appDelegate.sessionID = sessionId
+            
+            print("Session ID: \(sessionId)")
+        }
+        task.resume()
     }
     
     private func getUserID(sessionID: String) {
