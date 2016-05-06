@@ -86,25 +86,64 @@ class LoginViewController: UIViewController {
     
     private func getRequestToken() {
         
-        /* TASK: Get a request token, then store it (appDelegate.requestToken) and login with the token */
-        
-        /* 1. Set the parameters */
         let methodParameters = [
             Constants.TMDBParameterKeys.ApiKey: Constants.TMDBParameterValues.ApiKey
         ]
         
-        /* 2/3. Build the URL, Configure the request */
         let request = NSURLRequest(URL: appDelegate.tmdbURLFromParameters(methodParameters, withPathExtension: "/authentication/token/new"))
         
-        /* 4. Make the request */
         let task = appDelegate.sharedSession.dataTaskWithRequest(request) { (data, response, error) in
             
-            /* 5. Parse the data */
-            /* 6. Use the data! */
+            guard let parsedResult = self.getParsedResult(data, response: response, error: error) else {
+                return
+            }
+            
+            guard let requestToken = parsedResult[Constants.TMDBParameterKeys.RequestToken] as? String else {
+                self.displayError("Can't get request token")
+                return
+            }
+            
+            self.appDelegate.requestToken = requestToken
+            
+            print("Request Token: \(requestToken)")
         }
 
-        /* 7. Start the request */
         task.resume()
+    }
+    
+    func getParsedResult(data: NSData?, response: NSURLResponse?, error: NSError?) -> AnyObject? {
+        guard error == nil else {
+            self.displayError("Error occurred: \(error)")
+            return nil
+        }
+        
+        guard let statusCode = (response as? NSHTTPURLResponse)?.statusCode where statusCode >= 200 && statusCode <= 299 else {
+            self.displayError("Status code not 2**")
+            return nil
+        }
+        
+        guard let data = data else {
+            self.displayError("No data returned")
+            return nil
+        }
+        
+        let parsedResult: AnyObject
+        do {
+            parsedResult = try NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
+        } catch {
+            self.displayError("Can't parse JSON response")
+            return nil
+        }
+        
+        return parsedResult
+    }
+    
+    func displayError(message: String) {
+        print(message)
+        
+        dispatch_async(dispatch_get_main_queue()) {
+            self.setUIEnabled(true)
+        }
     }
     
     private func loginWithToken(requestToken: String) {
