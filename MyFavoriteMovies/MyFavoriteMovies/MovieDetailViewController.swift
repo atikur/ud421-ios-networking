@@ -172,22 +172,74 @@ class MovieDetailViewController: UIViewController {
     
     @IBAction func toggleFavorite(sender: AnyObject) {
         
-        // let shouldFavorite = !isFavorite
+        let methodParameters = [
+            Constants.TMDBParameterKeys.ApiKey: Constants.TMDBParameterValues.ApiKey,
+            Constants.TMDBParameterKeys.SessionID: appDelegate.sessionID!
+        ]
         
-        /* TASK: Add movie as favorite, then update favorite buttons */
-        /* 1. Set the parameters */
-        /* 2/3. Build the URL, Configure the request */
-        /* 4. Make the request */
-        /* 5. Parse the data */
-        /* 6. Use the data! */
-        /* 7. Start the request */
+        let shouldFavorite = !isFavorite
         
-        /* If the favorite/unfavorite request completes, then use this code to update the UI...
+        let url = appDelegate.tmdbURLFromParameters(methodParameters, withPathExtension: "/account/\(appDelegate.userID!)/favorite")
         
-        performUIUpdatesOnMain {
-            self.favoriteButton.tintColor = (shouldFavorite) ? nil : UIColor.blackColor()
+        let request = NSMutableURLRequest(URL: url)
+        request.HTTPMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        request.HTTPBody = "{\n \"media_type\": \"movie\",\n \"media_id\": \(movie!.id),\n \"favorite\": \(shouldFavorite)\n}".dataUsingEncoding(NSUTF8StringEncoding)
+        
+        let task = appDelegate.sharedSession.dataTaskWithRequest(request) {
+            data, response, error in
+            
+            guard let parsedResult = self.getParsedResult(data, response: response, error: error) else {
+                return
+            }
+            
+            guard let statusCode = parsedResult[Constants.TMDBResponseKeys.StatusCode] as? Int else {
+                print("Can't parse status code.")
+                return
+            }
+            
+            if statusCode == 1 || statusCode == 12 || statusCode == 13 {
+                self.isFavorite = shouldFavorite
+                
+                dispatch_sync(dispatch_get_main_queue()) {
+                    self.favoriteButton.tintColor = (shouldFavorite) ? nil : UIColor.blackColor()
+                }
+            }
         }
         
-        */
+        task.resume()
+    }
+    
+    func getParsedResult(data: NSData?, response: NSURLResponse?, error: NSError?) -> AnyObject? {
+        guard error == nil else {
+            self.displayError("Error occurred: \(error)")
+            return nil
+        }
+        
+        guard let statusCode = (response as? NSHTTPURLResponse)?.statusCode where statusCode >= 200 && statusCode <= 299 else {
+            self.displayError("Status code not 2xx")
+            return nil
+        }
+        
+        guard let data = data else {
+            self.displayError("No data returned")
+            return nil
+        }
+        
+        let parsedResult: AnyObject
+        do {
+            parsedResult = try NSJSONSerialization.JSONObjectWithData(data, options: .AllowFragments)
+        } catch {
+            self.displayError("Can't parse JSON response")
+            return nil
+        }
+        
+        return parsedResult
+    }
+    
+    func displayError(message: String) {
+        print(message)
     }
 }

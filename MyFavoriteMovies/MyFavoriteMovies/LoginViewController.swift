@@ -239,6 +239,7 @@ class LoginViewController: UIViewController {
             }
             
             self.appDelegate.userID = userId
+            self.completeLogin()
             
             print("User id: \(userId)")
         }
