@@ -74,7 +74,49 @@ class TMDBClient : NSObject {
     
     // MARK: POST
     
-    //func taskForPOSTMethod(method: String, var parameters: [String:AnyObject], jsonBody: [String:AnyObject], completionHandlerForPOST: (result: AnyObject!, error: NSError?) -> Void) -> NSURLSessionDataTask {}
+    func taskForPOSTMethod(method: String, parameters: [String:AnyObject], jsonBody: String, completionHandlerForPOST: (result: AnyObject!, error: NSError?) -> Void) -> NSURLSessionDataTask {
+    
+        var methodParameters = parameters
+        methodParameters[ParameterKeys.ApiKey] = Constants.ApiKey
+        
+        let url = TMDBClient.tmdbURLFromParameters(methodParameters, withPathExtension: method)
+        
+        let request = NSMutableURLRequest(URL: url)
+        request.HTTPMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Accept")
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.HTTPBody = jsonBody.dataUsingEncoding(NSUTF8StringEncoding)
+        
+        let task = session.dataTaskWithRequest(request) {
+            data, response, error in
+            
+            func sendError(error: String) {
+                let userInfo = [NSLocalizedDescriptionKey: error]
+                completionHandlerForPOST(result: nil, error: NSError(domain: "taskForPostMethod", code: 1, userInfo: userInfo))
+            }
+            
+            guard error == nil else {
+                sendError("There was an error with your request: \(error)")
+                return
+            }
+            
+            guard let statusCode = (response as? NSHTTPURLResponse)?.statusCode where statusCode >= 200 && statusCode <= 299 else {
+                sendError("Your request returned a status code other than 2xx!")
+                return
+            }
+            
+            guard let data = data else {
+                sendError("No data was returned by the request!")
+                return
+            }
+            
+            self.convertDataWithCompletionHandler(data, completionHandlerForConvertData: completionHandlerForPOST)
+        }
+        
+        task.resume()
+        
+        return task
+    }
     
     // MARK: GET Image
     
