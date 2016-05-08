@@ -130,17 +130,20 @@ extension TMDBClient {
     
     private func getUserID(completionHandlerForUserID: (success: Bool, userID: Int?, errorString: String?) -> Void) {
         
-        /* 1. Specify parameters, the API method, and the HTTP body (if POST) */
-        /* 2. Make the request */
-        /* 3. Send the desired value(s) to completion handler */
+        let parameters = [
+            ParameterKeys.SessionID: sessionID!
+        ]
+        let method = Methods.Account
         
-        /*
-        
-        taskForGETMethod(method, parameters: parameters) { (results, error) in
-        
+        taskForGETMethod(method, parameters: parameters) {
+            result, error in
+            
+            guard let userID = result[JSONResponseKeys.UserID] as? Int else {
+                completionHandlerForUserID(success: false, userID: nil, errorString: error?.localizedDescription)
+                return
+            }
+            completionHandlerForUserID(success: true, userID: userID, errorString: nil)
         }
-        
-        */
     }
     
     // MARK: GET Convenience Methods
