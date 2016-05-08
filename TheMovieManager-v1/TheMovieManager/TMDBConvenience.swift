@@ -111,18 +111,21 @@ extension TMDBClient {
     }
     
     private func getSessionID(requestToken: String?, completionHandlerForSession: (success: Bool, sessionID: String?, errorString: String?) -> Void) {
+
+        let parameters = [
+            ParameterKeys.RequestToken: requestToken!
+        ]
+        let method = Methods.AuthenticationSessionNew
         
-        /* 1. Specify parameters, the API method, and the HTTP body (if POST) */
-        /* 2. Make the request */
-        /* 3. Send the desired value(s) to completion handler */
-        
-        /*
-        
-        taskForGETMethod(method, parameters: parameters) { (results, error) in
-        
+        taskForGETMethod(method, parameters: parameters) {
+            result, error in
+            
+            guard let sessionID = result[JSONResponseKeys.SessionID] as? String else {
+                completionHandlerForSession(success: false, sessionID: nil, errorString: error?.localizedDescription)
+                return
+            }
+            completionHandlerForSession(success: true, sessionID: sessionID, errorString: nil)
         }
-        
-        */
     }
     
     private func getUserID(completionHandlerForUserID: (success: Bool, userID: Int?, errorString: String?) -> Void) {
